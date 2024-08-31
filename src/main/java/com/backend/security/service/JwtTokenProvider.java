@@ -1,9 +1,6 @@
 package com.backend.security.service;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.JwtException;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -14,6 +11,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.stereotype.Service;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 
 import java.nio.charset.StandardCharsets;
@@ -23,6 +21,8 @@ import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import javax.crypto.SecretKey;
+
 @Service
 public class JwtTokenProvider {
 
@@ -31,50 +31,47 @@ public class JwtTokenProvider {
 
     private final long validityInMilliseconds = 3600000; // 1 hour
     private final UserDetailsService userDetailsService;
+    private Key key; 
 
     public JwtTokenProvider(UserDetailsService userDetailsService) {
         this.userDetailsService = userDetailsService;
     }
 
+    @PostConstruct
+    protected void init() {
+        this.key = Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8));
+    }
+
     public String createToken(String username, List<String> roles) {
-        Key key = Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8));
-        Claims claims = Jwts.claims().setSubject(username);
-        // Prefix roles with "ROLE_" to match Spring Security's role format
-        claims.put("roles", roles.stream().map(role -> "ROLE_" + role).collect(Collectors.toList()));
-
-        Date now = new Date();
-        Date validity = new Date(now.getTime() + validityInMilliseconds);
-
         return Jwts.builder()
-                .setClaims(claims)
-                .setIssuedAt(now)
-                .setExpiration(validity)
-                .signWith(key, SignatureAlgorithm.HS256)
+                .subject(username) 
+                .claim("roles", roles.stream().map(role -> "ROLE_" + role).collect(Collectors.toList()))
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + validityInMilliseconds))
+                .signWith(key)
                 .compact();
     }
 
     public boolean validateToken(String token) {
         try {
-            Key key = Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8));
-            Jwts.parserBuilder()
-                .setSigningKey(key)
-                .build()
-                .parseClaimsJws(token);
+            JwtParser parser = Jwts.parser()
+                    .verifyWith((SecretKey) key)
+                    .build();
+            parser.parseSignedClaims(token); 
             return true;
-        } catch (JwtException | IllegalArgumentException e) {
+        } catch (Exception e) {
             System.err.println("JWT validation failed: " + e.getMessage());
             return false;
         }
     }
 
     public String getUsername(String token) {
-        Key key = Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8));
-        Claims claims = Jwts.parserBuilder()
-                .setSigningKey(key)
+        return Jwts.parser()
+        		.verifyWith((SecretKey) key)
                 .build()
-                .parseClaimsJws(token)
-                .getBody();
-        return claims.getSubject();
+                .parseSignedClaims(token)
+                .getPayload()
+                .getSubject();
     }
 
     public String resolveToken(HttpServletRequest request) {
@@ -87,12 +84,11 @@ public class JwtTokenProvider {
 
     @SuppressWarnings("unchecked")
     public Collection<? extends GrantedAuthority> getAuthorities(String token) {
-        Key key = Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8));
-        Claims claims = Jwts.parserBuilder()
-                .setSigningKey(key)
+        Claims claims = Jwts.parser()
+        		.verifyWith((SecretKey) key)
                 .build()
-                .parseClaimsJws(token)
-                .getBody();
+                .parseSignedClaims(token)
+                .getPayload();
         List<String> roles = claims.get("roles", List.class);
         return roles.stream()
                 .map(SimpleGrantedAuthority::new)

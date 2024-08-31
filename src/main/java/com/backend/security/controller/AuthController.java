@@ -35,7 +35,6 @@ public class AuthController {
                 new UsernamePasswordAuthenticationToken(username, password)
         );
 
-        // Check authentication success
         if (authentication.isAuthenticated()) {
             UserDetails userDetails = (UserDetails) authentication.getPrincipal();
             List<String> roles = userDetails.getAuthorities().stream()
@@ -53,6 +52,7 @@ public class AuthController {
     @PostMapping("/register")
     public String register(@RequestBody User user) {
         try {
+        	user.setRole(user.getRole().toUpperCase());  // Convert role to upper case
             userDetailsService.createUser(user);
             return "User registered successfully!";
         } catch (Exception e) {

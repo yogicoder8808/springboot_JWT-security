@@ -23,6 +23,7 @@ public class CustomUserDetailsService implements UserDetailsService {
     private PasswordEncoder passwordEncoder;
 
     public void createUser(User user) {
+    	user.setRole(user.getRole().toUpperCase());  // Convert role to upper case
         user.setPassword(passwordEncoder.encode(user.getPassword()));
         userRepository.save(user);
     }

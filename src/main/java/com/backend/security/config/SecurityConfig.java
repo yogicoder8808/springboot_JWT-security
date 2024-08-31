@@ -36,11 +36,11 @@ public class SecurityConfig {
             .authorizeHttpRequests(authorize -> authorize
                 .requestMatchers("/api/auth/login").permitAll()
                 .requestMatchers("/api/auth/register").permitAll() 
-                .requestMatchers("/api/v1/customer").hasAnyRole("CUSTOMER", "customer") // Role must be "CUSTOMER" 
+                .requestMatchers("/api/v1/customer").hasRole("CUSTOMER") 
                 .requestMatchers("/api/v1/info").permitAll()
                 .anyRequest().authenticated()
             )
-            .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class); // Ensure this is before UsernamePasswordAuthenticationFilter
+            .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class); 
 
         return http.build();
     }
